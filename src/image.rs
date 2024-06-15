@@ -5,6 +5,7 @@ use std::{
 };
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone)]
     pub struct TagVariants: u8 {
         const GPU = 1;
         const PY3 = 1 << 1;
@@ -79,7 +80,7 @@ pub enum ImageSource<'a> {
 impl<'a> Image<'a> {
     pub fn pull(&self, docker_cmd: &str) -> io::Result<()> {
         let mut command = Command::new(docker_cmd);
-        command.args(&["pull", &String::from(self)]);
+        command.args(["pull", &String::from(self)]);
         eprintln!("{:?}", command);
         command.status().map(|_| ())
     }

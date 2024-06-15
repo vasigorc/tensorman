@@ -67,7 +67,7 @@ impl RawConfig {
             format!("failed to read configuration file at {}", config_path.display())
         })?;
 
-        toml::from_str::<Self>(&*data).with_context(|| {
+        toml::from_str::<Self>(&data).with_context(|| {
             format!("failed to parse TOML in configuration file at {}", config_path.display())
         })
     }

@@ -35,7 +35,7 @@ fn main_() -> Result<(), Error> {
     let toolchain_override = toolchain::toolchain_override();
 
     let (mut specific_container, mut tag, mut variants) =
-        toolchain_override.as_ref().or_else(|| config.image.as_ref()).map_or_else(
+        toolchain_override.as_ref().or(config.image.as_ref()).map_or_else(
             || (None, "latest", TagVariants::empty()),
             |image| {
                 let (container, tag) = match &image.source {
@@ -86,14 +86,13 @@ fn main_() -> Result<(), Error> {
             "--" => break,
             "-f" | "--force" => force = true,
             "--gpu" => flagged_variants |= TagVariants::GPU,
-            "--https" => {},
+            "--https" => {}
             "--docker-cmd" => {
-                docker_cmd =
-                    arguments
-                        .next()
-                        .context("the --docker-cmd flag requires an argument")
-                        .map_err(Error::ArgumentUsage)?
-                        .as_str()
+                docker_cmd = arguments
+                    .next()
+                    .context("the --docker-cmd flag requires an argument")
+                    .map_err(Error::ArgumentUsage)?
+                    .as_str()
             }
             "--jupyter" => flagged_variants |= TagVariants::JUPYTER,
             "--name" => {
@@ -197,7 +196,7 @@ fn main_() -> Result<(), Error> {
 
             let args: Vec<&str> = subcommand_args.collect();
             let args: Option<&[&str]> = if args.is_empty() { None } else { Some(&args) };
-            let dflags = config.docker_flags.as_ref().map(Vec::as_slice);
+            let dflags = config.docker_flags.as_deref();
 
             runtime
                 .run(&image, cmd, name, ports, as_root, args, dflags)
@@ -294,7 +293,7 @@ FLAGS:
 
 fn help() -> ! {
     println!("{}", HELP);
-    exit(0);
+    exit(0)
 }
 
 fn main() {

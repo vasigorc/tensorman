@@ -4,9 +4,9 @@ use crate::{
     image::{Image, TagVariants},
     info::{iterate_image_info, Info},
 };
-use nix::unistd::geteuid;
+use nix::unistd::Uid;
 use serde::Deserialize;
-use serde_json;
+
 use std::{env, io, process::Command};
 use tabular::{Row, Table};
 
@@ -20,10 +20,10 @@ pub struct DockerContainer {
 #[allow(non_snake_case)]
 pub struct DockerImage {
     pub Repository: String,
-    pub Tag: String,
-    pub CreatedAt: String,
-    pub ID: String,
-    pub Size: String,
+    pub Tag:        String,
+    pub CreatedAt:  String,
+    pub ID:         String,
+    pub Size:       String,
 }
 
 pub struct Runtime<'a> {
@@ -32,43 +32,33 @@ pub struct Runtime<'a> {
 
 impl<'a> Runtime<'a> {
     /// Creates a new runtime for interacting with Docker.
-    pub fn new(docker_cmd: &'a str) -> anyhow::Result<Self> {
-        Ok(Self {
-            docker_cmd,
-        })
-    }
+    pub fn new(docker_cmd: &'a str) -> anyhow::Result<Self> { Ok(Self { docker_cmd }) }
 
     /// Fetches a list of docker containers.
     pub fn containers(&mut self) -> anyhow::Result<Vec<DockerContainer>> {
         let context = "failed to fetch list of containers from Docker service";
 
-        let json = self.call_docker_output(&[
-            "container",
-            "ls",
-            "--format",
-            "{{json .}}",
-        ]).context(context)?;
+        let json = self
+            .call_docker_output(&["container", "ls", "--format", "{{json .}}"])
+            .context(context)?;
 
-        Ok(serde_json::Deserializer::from_slice(&json)
-                                    .into_iter::<DockerContainer>()
-                                    .collect::<Result<_, _>>()
-                                    .context(context)?)
+        serde_json::Deserializer::from_slice(&json)
+            .into_iter::<DockerContainer>()
+            .collect::<Result<_, _>>()
+            .context(context)
     }
 
     /// Fetches a list of docker images.
     pub fn images(&mut self) -> anyhow::Result<Vec<DockerImage>> {
         let context = "failed to fetch list of images from Docker service";
 
-        let json = self.call_docker_output(&[
-            "images",
-            "--format",
-            "{{json .}}",
-        ]).context(context)?;
+        let json =
+            self.call_docker_output(&["images", "--format", "{{json .}}"]).context(context)?;
 
-        Ok(serde_json::Deserializer::from_slice(&json)
-                                    .into_iter::<DockerImage>()
-                                    .collect::<Result<_, _>>()
-                                    .context(context)?)
+        serde_json::Deserializer::from_slice(&json)
+            .into_iter::<DockerImage>()
+            .collect::<Result<_, _>>()
+            .context(context)
     }
 
     /// Displays docker images currently installed which are relevant to tensorman.
@@ -106,7 +96,8 @@ impl<'a> Runtime<'a> {
         for info in iterate_image_info(images) {
             if info.field_matches(argument) {
                 found = true;
-                self.docker_remove_image(&info, force).context("failed to remove the docker image")?;
+                self.docker_remove_image(&info, force)
+                    .context("failed to remove the docker image")?;
             }
         }
 
@@ -136,14 +127,14 @@ impl<'a> Runtime<'a> {
         let user: &str = if as_root {
             "root"
         } else {
-            user_ = format!("{0}:{0}", geteuid());
-            &*user_
+            user_ = format!("{0}:{0}", Uid::effective());
+            &user_
         };
 
-        command.args(&["run", "-u", &user]);
+        command.args(["run", "-u", user]);
 
         if let Some(name) = name {
-            let name: &str = &*["tensorman-", name].concat();
+            let name: &str = &["tensorman-", name].concat();
             ensure!(
                 !self.container_exists(name)?,
                 "an active container named {} already exists",
@@ -166,7 +157,7 @@ impl<'a> Runtime<'a> {
             command.args(args);
         }
 
-        command.args(&[
+        command.args([
             "-it",
             "--rm",
             "-v",
@@ -188,7 +179,7 @@ impl<'a> Runtime<'a> {
 
     /// Saves an active container to a new image in the tensorman repository
     pub fn save(&mut self, container: &str, repo: &str) -> anyhow::Result<()> {
-        let container: &str = &*["tensorman-", container].concat();
+        let container: &str = &["tensorman-", container].concat();
 
         ensure!(self.container_exists(container)?, "the container to be saved does not exist");
 
@@ -222,19 +213,17 @@ impl<'a> Runtime<'a> {
     /// Queries docker for a list of containers, and returns `Ok(true)` if container
     /// with a compatible name is found.
     fn container_exists(&mut self, name: &str) -> anyhow::Result<bool> {
-        Ok(self.containers()?
-               .iter()
-               .any(|c| c.Names.split(", ").any(|e| e == name)))
+        Ok(self.containers()?.iter().any(|c| c.Names.split(", ").any(|e| e == name)))
     }
 
     fn commit_command(&self, container: &str, repo: &str) -> io::Result<()> {
         let image = ["tensorman:", repo].concat();
-        Command::new(self.docker_cmd).args(&["commit", container, &image]).status().map(|_| ())
+        Command::new(self.docker_cmd).args(["commit", container, &image]).status().map(|_| ())
     }
 
     fn docker_remove_image(&self, info: &Info, force: bool) -> io::Result<()> {
         let mut command = Command::new(self.docker_cmd);
-        command.args(&["rmi", &info.image_id]);
+        command.args(["rmi", &info.image_id]);
 
         if force {
             command.arg("--force");
@@ -252,5 +241,17 @@ impl<'a> Runtime<'a> {
         } else {
             Err(anyhow::Error::msg(String::from_utf8_lossy(&output.stderr).trim().to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn images_works() {
+        let docker_cmd = "docker";
+
+        let _runtime = Runtime::new(docker_cmd);
     }
 }
